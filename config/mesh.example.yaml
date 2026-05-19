@@ -1,0 +1,105 @@
+local_node_id: keith-local
+store_path: .orchestro-mesh/mesh.db
+nodes:
+  - node_id: keith-local
+    owner: keith
+    trust_domain: local
+    status: online
+    current_jobs: 0
+    queue_depth: 0
+    hardware:
+      cpu_model: Ryzen
+      cpu_threads: 32
+      ram_gb: 128
+      gpus:
+        - vendor: amd
+          model: RX 9070 XT
+          vram_gb: 16
+        - vendor: amd
+          model: RX 7900 XT
+          vram_gb: 20
+      tags: [home, amd, local]
+    backends:
+      - id: local-llama
+        kind: llama.cpp
+        base_url: http://127.0.0.1:8080/v1
+        supports_streaming: true
+        supports_tools: false
+        supports_embeddings: false
+        supports_batching: false
+        timeout_s: 120
+    models:
+      - id: qwen-local-coder
+        backend_id: local-llama
+        display_name: Qwen local coder
+        quantization: GGUF-Q4
+        context_window: 32768
+        max_output_tokens: 4096
+        required_vram_gb: 16
+        state: warm
+        tags: [coding, local, private-ok]
+        task_classes: [chat, coding, analysis]
+        benchmark:
+          expected_prompt_tps: 250.0
+          expected_decode_tps: 28.0
+          expected_end_to_end_tps: 24.0
+          expected_tool_output_tps: 18.0
+          confidence: 0.25
+          samples: []
+    policy:
+      allowed_users: [keith]
+      allowed_sensitivities: [public, friends-private, repo-private, secret-local, tool-local]
+      denied_sensitivities: []
+      max_concurrent_jobs: 1
+      allow_remote_tool_authority: true
+      tags: [local, private-ok]
+
+  - node_id: friend-a-4090
+    owner: friend-a
+    trust_domain: friends
+    status: online
+    current_jobs: 0
+    queue_depth: 0
+    hardware:
+      cpu_model: Ryzen or Core
+      cpu_threads: 24
+      ram_gb: 128
+      gpus:
+        - vendor: nvidia
+          model: RTX 4090
+          vram_gb: 24
+      tags: [friend, nvidia, fast]
+    backends:
+      - id: friend-a-vllm
+        kind: vllm
+        base_url: http://friend-a.tailnet.example:8000/v1
+        supports_streaming: true
+        supports_tools: true
+        supports_embeddings: false
+        supports_batching: true
+        timeout_s: 180
+    models:
+      - id: qwen-coder-friend-a
+        backend_id: friend-a-vllm
+        display_name: Qwen coder on Friend A
+        quantization: AWQ-or-FP8
+        context_window: 65536
+        max_output_tokens: 8192
+        required_vram_gb: 24
+        state: warm
+        tags: [coding, analysis, fast, friends-ok]
+        task_classes: [chat, coding, analysis, tool-use]
+        benchmark:
+          expected_prompt_tps: 800.0
+          expected_decode_tps: 60.0
+          expected_end_to_end_tps: 48.0
+          expected_tool_output_tps: 32.0
+          confidence: 0.35
+          samples: []
+    policy:
+      allowed_users: [keith, friend-a, friend-b]
+      allowed_sensitivities: [public, friends-private]
+      denied_sensitivities: [repo-private, secret-local, tool-local]
+      max_concurrent_jobs: 2
+      allow_remote_tool_authority: false
+      tags: [friends-ok]
