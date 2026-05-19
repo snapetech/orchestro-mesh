@@ -1,6 +1,6 @@
 # Orchestro Mesh
 
-Private trusted inference mesh and capability market for Orchestro.
+Private trusted inference mesh and capability market, with orchestrater (Orchestro)
 
 Orchestro Mesh gives a small trusted group one local OpenAI-compatible endpoint while coordinating multiple private GPU/CPU nodes behind it. The project is intentionally **request-level federation first**, not premature distributed tensor parallelism over residential internet.
 
