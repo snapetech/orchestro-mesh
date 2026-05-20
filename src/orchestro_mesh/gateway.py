@@ -1,18 +1,26 @@
 from __future__ import annotations
 
+import os
 from typing import Any
 
 from fastapi import FastAPI, HTTPException
 
-from orchestro_mesh.config import MeshConfig
+from orchestro_mesh.config import MeshConfig, load_config
 from orchestro_mesh.models import ChatMessage, InferenceRequest, JobRecord, Sensitivity, TaskClass
 from orchestro_mesh.openai_client import OpenAICompatClient
 from orchestro_mesh.scheduler import Scheduler
 from orchestro_mesh.store import MeshStore
 
 
+def load_gateway_config() -> MeshConfig:
+    config_path = os.environ.get("ORCHESTRO_MESH_CONFIG")
+    if config_path:
+        return load_config(config_path)
+    return MeshConfig()
+
+
 def create_gateway_app(config: MeshConfig | None = None) -> FastAPI:
-    config = config or MeshConfig()
+    config = config or load_gateway_config()
     store = MeshStore(config.store_path)
     for node in config.nodes:
         store.upsert_node(node)
