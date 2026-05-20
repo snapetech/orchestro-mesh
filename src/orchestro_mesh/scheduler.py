@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from orchestro_mesh.models import (
     BackendEndpoint,
     InferenceRequest,
@@ -11,19 +13,41 @@ from orchestro_mesh.models import (
     RouteRejection,
     RouteResult,
     TaskClass,
+    now_utc,
 )
 from orchestro_mesh.policy import evaluate_policy
 
 
 class Scheduler:
-    def __init__(self, local_node_id: str | None = None) -> None:
-        self.local_node_id = local_node_id
+    # Score nudge applied per (rating - 0.5). A rating of 1.0 → +40, 0.0 → -40.
+    RATING_WEIGHT = 80.0
 
-    def route(self, request: InferenceRequest, inventories: list[NodeInventory]) -> RouteResult:
+    def __init__(
+        self,
+        local_node_id: str | None = None,
+        node_ttl_seconds: int | None = None,
+    ) -> None:
+        self.local_node_id = local_node_id
+        self.node_ttl_seconds = node_ttl_seconds
+        self._rating_averages: dict[tuple[str, str], float] = {}
+
+    def update_rating_averages(self, averages: dict[tuple[str, str], float]) -> None:
+        self._rating_averages = dict(averages)
+
+    def route(
+        self,
+        request: InferenceRequest,
+        inventories: list[NodeInventory],
+        now: datetime | None = None,
+    ) -> RouteResult:
+        moment = now or now_utc()
         candidates: list[RouteCandidate] = []
         rejections: list[RouteRejection] = []
 
         for node in inventories:
+            if self._is_stale(node, moment):
+                rejections.append(RouteRejection(node_id=node.node_id, reason="node heartbeat is stale"))
+                continue
             for model in node.models:
                 backend = node.backend_by_id(model.backend_id)
                 if backend is None:
@@ -42,7 +66,21 @@ class Scheduler:
             return RouteResult(decision=RouteDecision.DENY, request_id=request.id, rejections=rejections)
 
         candidates.sort(key=lambda candidate: candidate.score, reverse=True)
-        return RouteResult(decision=RouteDecision.ALLOW, request_id=request.id, selected=candidates[0], rejections=rejections)
+        return RouteResult(
+            decision=RouteDecision.ALLOW,
+            request_id=request.id,
+            selected=candidates[0],
+            candidates=candidates,
+            rejections=rejections,
+        )
+
+    def _is_stale(self, node: NodeInventory, now: datetime) -> bool:
+        if self.node_ttl_seconds is None or self.node_ttl_seconds <= 0:
+            return False
+        if self.local_node_id and node.node_id == self.local_node_id:
+            return False
+        age = (now - node.last_seen).total_seconds()
+        return age > self.node_ttl_seconds
 
     def score(
         self,
@@ -107,4 +145,11 @@ class Scheduler:
             reasons.append("backend advertises tool support")
 
         score += model.benchmark.confidence * 20.0
+
+        rating = self._rating_averages.get((node.node_id, model.id))
+        if rating is not None:
+            nudge = (rating - 0.5) * self.RATING_WEIGHT
+            score += nudge
+            reasons.append(f"feedback nudge {nudge:+.1f} (avg {rating:.2f})")
+
         return score, reasons

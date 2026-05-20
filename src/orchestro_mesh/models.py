@@ -231,7 +231,27 @@ class RouteResult(BaseModel):
     decision: RouteDecision
     request_id: str
     selected: RouteCandidate | None = None
+    candidates: list[RouteCandidate] = Field(default_factory=list)
     rejections: list[RouteRejection] = Field(default_factory=list)
+
+
+class Heartbeat(BaseModel):
+    node_id: str
+    status: NodeStatus | None = None
+    current_jobs: int | None = None
+    queue_depth: int | None = None
+
+
+class FeedbackRating(BaseModel):
+    id: str = Field(default_factory=lambda: str(uuid4()))
+    job_id: str
+    node_id: str | None = None
+    model_id: str | None = None
+    requester: str | None = None
+    verifier: str = "human"
+    rating: float = Field(ge=0.0, le=1.0)
+    notes: str | None = None
+    created_at: datetime = Field(default_factory=now_utc)
 
 
 class JobRecord(BaseModel):

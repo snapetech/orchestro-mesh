@@ -1,0 +1,50 @@
+name: e2e (cross-repo)
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      orchestro_ref:
+        description: "Git ref of snapetech/orchestro to test against"
+        required: false
+        default: "main"
+
+jobs:
+  cross-repo:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out orchestro-mesh
+        uses: actions/checkout@v4
+        with:
+          path: orchestro-mesh
+
+      - name: Check out orchestro
+        uses: actions/checkout@v4
+        with:
+          repository: snapetech/orchestro
+          ref: ${{ github.event.inputs.orchestro_ref || 'main' }}
+          path: orchestro
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install both packages
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -e ./orchestro-mesh[dev]
+          python -m pip install -e ./orchestro
+
+      - name: Verify cross-imports
+        run: |
+          python -c "import orchestro_mesh, orchestro; print('mesh', orchestro_mesh.__version__)"
+          python -c "from orchestro.backends.mesh import MeshBackend; from orchestro import mesh_feedback; print('mesh backend + feedback ok')"
+
+      - name: Run mesh unit suite
+        working-directory: orchestro-mesh
+        run: pytest tests --ignore=tests/e2e
+
+      - name: Run cross-repo e2e suite
+        working-directory: orchestro-mesh
+        run: pytest tests/e2e -v
